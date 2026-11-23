@@ -10,7 +10,7 @@ Script para macOS que pergunta uma ou várias extensões de arquivo e copia todo
    - extensões — uma ou várias, separadas por vírgula ou espaço (ex.: `epub, mobi, pdf, azw3`), com ou sem ponto, maiúsculas ou minúsculas;
    - pasta de **origem** e pasta de **destino**;
    - se quer incluir as subpastas.
-4. No fim, aparece um **resumo** com o total de arquivos e o tamanho copiado, separado em novos, substituídos e segunda cópia (e por extensão, quando forem várias), além de erros, metadados `._` ignorados e o tempo gasto. Dá para abrir a pasta de destino direto dali.
+4. No fim, aparece um **resumo** com o total de arquivos e o tamanho copiado, separado em novos, substituídos, segunda cópia e pulados (e por extensão, quando forem várias), além de erros, metadados `._` ignorados e o tempo gasto. Dá para abrir a pasta de destino direto dali.
 
 Se o arquivo baixado não abrir, rode uma vez no Terminal:
 
@@ -21,12 +21,13 @@ chmod +x ~/Downloads/"Copiar por extensão.command"
 ## Comportamento
 
 - **Nunca apaga nada** na origem.
-- **Arquivo repetido no destino:** o script avisa e pergunta o que fazer:
-  - **Cancelar transferência** — para tudo ali (o que já foi copiado fica);
-  - **Substituir** — troca o arquivo do destino pelo da origem;
-  - **Manter as duas** — salva a nova cópia como `nome (2).ext`, `nome (3).ext`…
-  
-  Ao escolher Substituir ou Manter as duas, ele pergunta se vale **só para este arquivo** ou para **todos** os próximos repetidos.
+- **Arquivo repetido no destino:** o script avisa e mostra uma lista de opções:
+  - **Pular** — não copia esse arquivo e segue copiando só os novos (o do destino fica como está);
+  - **Substituir o do destino** — troca o arquivo do destino pelo da origem;
+  - **Manter as duas cópias** — salva a nova cópia como `nome (2).ext`, `nome (3).ext`…;
+  - botão **Cancelar transferência** — para tudo ali (o que já foi copiado fica).
+
+  Ao escolher Pular, Substituir ou Manter as duas, ele pergunta se vale **só para este arquivo** ou para **todos** os próximos repetidos.
 - Preserva as datas dos arquivos (`cp -p`).
 - **Ignora os metadados `._*`** do macOS na origem e **não cria novos `._*` no destino** (usa `cp -X` e `COPYFILE_DISABLE=1`).
 - Se o destino estiver dentro da origem, ele é ignorado na busca (não copia arquivos para cima de si mesmo).

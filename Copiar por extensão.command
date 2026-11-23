@@ -68,9 +68,9 @@ nome_livre() {
 }
 
 # 4. Copiar (ignora a pasta de destino e os arquivos de metadados ._ do macOS)
-copiados=0; substituidos=0; duplicados=0; erros=0; cancelado=0
-b_copiados=0; b_substituidos=0; b_duplicados=0
-PARA_TODOS=""      # vazio = perguntar a cada conflito; "Substituir" ou "Manter as duas" = vale para todos
+copiados=0; substituidos=0; duplicados=0; pulados=0; erros=0; cancelado=0
+b_copiados=0; b_substituidos=0; b_duplicados=0; b_pulados=0
+PARA_TODOS=""      # vazio = perguntar a cada conflito; senão, a escolha vale para todos os repetidos
 ignorados=$(find "$ORIGEM" $PROF -path "$DESTINO" -prune -o -type f -name "._*" "${FILTRO[@]}" -print | wc -l | tr -d ' ')
 INICIO_T=$(date +%s)
 echo "Copiando arquivos $LISTA de:"; echo "  $ORIGEM"; echo "para:"; echo "  $DESTINO"; echo
@@ -84,13 +84,22 @@ while IFS= read -r -d '' arq; do
       escolha="$PARA_TODOS"
     else
       n_esc=$(aspas "$nome")
-      escolha=$(pergunta "button returned of (display dialog \"O arquivo \\\"$n_esc\\\" já existe na pasta de destino.\" & return & return & \"O que você quer fazer?\" with title \"Arquivo já existe\" with icon caution buttons {\"Cancelar transferência\",\"Manter as duas\",\"Substituir\"} default button \"Manter as duas\")")
-      if [ "$escolha" = "Substituir" ] || [ "$escolha" = "Manter as duas" ]; then
+      # lista de opções (o diálogo comum do macOS só aceita 3 botões)
+      escolha=$(pergunta "choose from list {\"Pular (não copiar este arquivo)\", \"Substituir o do destino\", \"Manter as duas cópias\"} with title \"Arquivo já existe\" with prompt \"O arquivo \\\"$n_esc\\\" já existe na pasta de destino. O que você quer fazer?\" default items {\"Pular (não copiar este arquivo)\"} OK button name \"Continuar\" cancel button name \"Cancelar transferência\"")
+      case "$escolha" in
+        Pular*)      escolha="Pular" ;;
+        Substituir*) escolha="Substituir" ;;
+        Manter*)     escolha="Manter as duas" ;;
+        *)           escolha="Cancelar" ;;
+      esac
+      if [ "$escolha" != "Cancelar" ]; then
         quanto=$(pergunta "button returned of (display dialog \"$escolha: aplicar só a este arquivo ou a todos os próximos arquivos repetidos?\" with title \"Arquivo já existe\" buttons {\"Só este arquivo\",\"Todos\"} default button \"Só este arquivo\")")
         [ "$quanto" = "Todos" ] && PARA_TODOS="$escolha"
       fi
     fi
     case "$escolha" in
+      "Pular")          tam=$(tamanho "$arq"); pulados=$((pulados+1)); b_pulados=$((b_pulados+tam))
+                        echo "↷ $nome (já existe, pulado)"; continue ;;
       "Substituir")     acao="substituir" ;;
       "Manter as duas") acao="duplicar"; alvo=$(nome_livre "$nome") ;;
       *)                cancelado=1; echo "■ Transferência cancelada em: $nome"; break ;;
@@ -116,7 +125,7 @@ total=$((copiados+substituidos+duplicados))
 b_total=$((b_copiados+b_substituidos+b_duplicados))
 seg=$(( $(date +%s) - INICIO_T )); tempo="$((seg/60)) min $((seg%60)) s"
 
-if [ $total -eq 0 ] && [ $erros -eq 0 ] && [ $cancelado -eq 0 ]; then
+if [ $total -eq 0 ] && [ $erros -eq 0 ] && [ $cancelado -eq 0 ] && [ $pulados -eq 0 ]; then
   MSG="Nenhum arquivo $LISTA encontrado na origem."
 else
   MSG="RESUMO DA CÓPIA ($LISTA)"
@@ -130,6 +139,8 @@ Total copiado: $total arquivo(s) — $(legivel $b_total)"
 • Substituídos: $substituidos — $(legivel $b_substituidos)"
   [ $duplicados -gt 0 ]   && MSG="$MSG
 • Segunda cópia: $duplicados — $(legivel $b_duplicados)"
+  [ $pulados -gt 0 ]      && MSG="$MSG
+• Pulados (já existiam no destino): $pulados — $(legivel $b_pulados)"
   if [ ${#EXTS[@]} -gt 1 ]; then
     MSG="$MSG
 
