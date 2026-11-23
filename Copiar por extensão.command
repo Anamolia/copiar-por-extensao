@@ -6,6 +6,26 @@
 export COPYFILE_DISABLE=1   # não deixa o macOS criar arquivos ._ no destino
 
 pergunta() { osascript -e "$1" 2>/dev/null; }
+
+# Fecha a janela do Terminal ao sair (só se o script foi aberto pelo Terminal do macOS).
+# Se houver erros na cópia, a janela fica aberta para você ver quais arquivos falharam.
+FECHAR=1
+fechar_terminal() {
+  [ "$FECHAR" = 1 ] && [ "$TERM_PROGRAM" = "Apple_Terminal" ] || return 0
+  local meu_tty; meu_tty=$(tty 2>/dev/null) || return 0
+  nohup osascript -e 'delay 0.3' -e "tell application \"Terminal\"
+    repeat with w in windows
+      try
+        if tty of selected tab of w is \"$meu_tty\" then
+          close w saving no
+          exit repeat
+        end if
+      end try
+    end repeat
+    if (count of windows) is 0 then quit
+  end tell" </dev/null >/dev/null 2>&1 &
+}
+trap fechar_terminal EXIT
 # escapa texto para o AppleScript (aspas, barras e quebras de linha)
 aspas() { printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' | awk 'NR>1{printf "\\n"} {printf "%s",$0}'; }
 # tamanho de um arquivo em bytes (macOS e Linux)
@@ -159,4 +179,5 @@ Por extensão:"
 Tempo: $tempo"
 fi
 echo; echo "$MSG"
+[ $erros -gt 0 ] && FECHAR=0   # deixa o Terminal aberto para ver os erros
 pergunta "display dialog \"$(aspas "$MSG")\" with title \"Copiar por extensão\" buttons {\"Abrir destino\",\"OK\"} default button \"OK\"" | grep -q "Abrir destino" && open "$DESTINO"

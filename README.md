@@ -10,7 +10,7 @@ Script para macOS que pergunta uma ou várias extensões de arquivo e copia todo
    - extensões — uma ou várias, separadas por vírgula ou espaço (ex.: `epub, mobi, pdf, azw3`), com ou sem ponto, maiúsculas ou minúsculas;
    - pasta de **origem** e pasta de **destino**;
    - se quer incluir as subpastas.
-4. No fim, aparece um **resumo** com o total de arquivos e o tamanho copiado, separado em novos, substituídos, segunda cópia e pulados (e por extensão, quando forem várias), além de erros, metadados `._` ignorados e o tempo gasto. Dá para abrir a pasta de destino direto dali.
+4. No fim, aparece um **resumo** com o total de arquivos e o tamanho copiado, separado em novos, substituídos, segunda cópia e pulados (e por extensão, quando forem várias), além de erros, metadados `._` ignorados e o tempo gasto. Dá para abrir a pasta de destino direto dali. Ao terminar, **a janela do Terminal fecha sozinha** (se houver erros, ela fica aberta para você ver quais arquivos falharam).
 
 Se o arquivo baixado não abrir, rode uma vez no Terminal:
 
