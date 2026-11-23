@@ -10,7 +10,7 @@ Script para macOS que pergunta uma extensão de arquivo e copia todos os arquivo
    - extensão (`pdf`, `epub`, `mp4`… — com ou sem ponto, maiúsculas ou minúsculas);
    - pasta de **origem** e pasta de **destino**;
    - se quer incluir as subpastas.
-4. No fim, uma janela mostra quantos arquivos foram copiados e oferece abrir a pasta de destino.
+4. No fim, uma janela mostra quantos arquivos foram copiados, substituídos ou duplicados e oferece abrir a pasta de destino.
 
 Se o arquivo baixado não abrir, rode uma vez no Terminal:
 
@@ -20,8 +20,13 @@ chmod +x ~/Downloads/"Copiar por extensão.command"
 
 ## Comportamento
 
-- **Só copia** — nunca apaga nem move nada.
-- **Nunca sobrescreve**: se o nome já existir no destino, salva como `nome (2).ext`, `nome (3).ext`…
+- **Nunca apaga nada** na origem.
+- **Arquivo repetido no destino:** o script avisa e pergunta o que fazer:
+  - **Cancelar transferência** — para tudo ali (o que já foi copiado fica);
+  - **Substituir** — troca o arquivo do destino pelo da origem;
+  - **Manter as duas** — salva a nova cópia como `nome (2).ext`, `nome (3).ext`…
+  
+  Ao escolher Substituir ou Manter as duas, ele pergunta se vale **só para este arquivo** ou para **todos** os próximos repetidos.
 - Preserva as datas dos arquivos (`cp -p`).
 - Ignora os arquivos ocultos `._*` que o macOS cria em discos externos.
 - Se o destino estiver dentro da origem, ele é ignorado na busca (não copia arquivos para cima de si mesmo).

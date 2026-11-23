@@ -1,8 +1,10 @@
 #!/bin/bash
 # Copiar por extensão — pergunta uma extensão e copia todos os arquivos
-# dessa extensão de uma pasta para outra. Nunca apaga nem sobrescreve nada.
+# dessa extensão de uma pasta para outra. Nunca apaga nada; só substitui
+# um arquivo no destino se você escolher "Substituir".
 
 pergunta() { osascript -e "$1" 2>/dev/null; }
+aspas() { printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g'; }   # escapa texto para o AppleScript
 
 # 1. Extensão
 EXT=$(pergunta 'text returned of (display dialog "Qual extensão você quer copiar?" & return & "(ex.: pdf, epub, jpg, mp4)" default answer "" with title "Copiar por extensão" buttons {"Cancelar","Continuar"} default button "Continuar" cancel button "Cancelar")')
@@ -25,27 +27,59 @@ fi
 SUB=$(pergunta 'button returned of (display dialog "Incluir também os arquivos que estão dentro das subpastas?" with title "Copiar por extensão" buttons {"Só esta pasta","Incluir subpastas"} default button "Incluir subpastas")')
 [ "$SUB" = "Só esta pasta" ] && PROF="-maxdepth 1" || PROF=""
 
-# 4. Copiar (ignora a pasta de destino, os arquivos ocultos ._ do macOS e nunca sobrescreve)
-copiados=0; erros=0
+# Nome livre "nome (2).ext", "nome (3).ext"... para manter as duas cópias
+nome_livre() {
+  local nome="$1" base ext n=2
+  if [[ "$nome" == *.* ]]; then base="${nome%.*}"; ext=".${nome##*.}"; else base="$nome"; ext=""; fi
+  while [ -e "$DESTINO/$base ($n)$ext" ]; do n=$((n+1)); done
+  printf '%s' "$DESTINO/$base ($n)$ext"
+}
+
+# 4. Copiar (ignora a pasta de destino e os arquivos ocultos ._ do macOS)
+copiados=0; substituidos=0; duplicados=0; erros=0; cancelado=0
+PARA_TODOS=""      # vazio = perguntar a cada conflito; "Substituir" ou "Manter as duas" = vale para todos
 echo "Copiando arquivos .$EXT de:"; echo "  $ORIGEM"; echo "para:"; echo "  $DESTINO"; echo
 while IFS= read -r -d '' arq; do
   nome=$(basename "$arq")
   alvo="$DESTINO/$nome"
-  if [ -e "$alvo" ]; then          # já existe: cria "nome (2).ext", "nome (3).ext"...
-    base="${nome%.*}"; ext="${nome##*.}"; n=2
-    while [ -e "$DESTINO/$base ($n).$ext" ]; do n=$((n+1)); done
-    alvo="$DESTINO/$base ($n).$ext"
+  acao="copiar"
+
+  if [ -e "$alvo" ]; then
+    if [ -n "$PARA_TODOS" ]; then
+      escolha="$PARA_TODOS"
+    else
+      n_esc=$(aspas "$nome")
+      escolha=$(pergunta "button returned of (display dialog \"O arquivo \\\"$n_esc\\\" já existe na pasta de destino.\" & return & return & \"O que você quer fazer?\" with title \"Arquivo já existe\" with icon caution buttons {\"Cancelar transferência\",\"Manter as duas\",\"Substituir\"} default button \"Manter as duas\")")
+      if [ "$escolha" = "Substituir" ] || [ "$escolha" = "Manter as duas" ]; then
+        quanto=$(pergunta "button returned of (display dialog \"$escolha: aplicar só a este arquivo ou a todos os próximos arquivos repetidos?\" with title \"Arquivo já existe\" buttons {\"Só este arquivo\",\"Todos\"} default button \"Só este arquivo\")")
+        [ "$quanto" = "Todos" ] && PARA_TODOS="$escolha"
+      fi
+    fi
+    case "$escolha" in
+      "Substituir")     acao="substituir" ;;
+      "Manter as duas") acao="duplicar"; alvo=$(nome_livre "$nome") ;;
+      *)                cancelado=1; echo "■ Transferência cancelada em: $nome"; break ;;
+    esac
   fi
+
   if cp -p "$arq" "$alvo"; then
-    copiados=$((copiados+1)); echo "✓ $nome"
+    case "$acao" in
+      copiar)     copiados=$((copiados+1));         echo "✓ $nome" ;;
+      substituir) substituidos=$((substituidos+1)); echo "↻ $nome (substituído)" ;;
+      duplicar)   duplicados=$((duplicados+1));     echo "⧉ $nome → $(basename "$alvo")" ;;
+    esac
   else
     erros=$((erros+1)); echo "✗ ERRO: $arq"
   fi
 done < <(find "$ORIGEM" $PROF -path "$DESTINO" -prune -o -type f -iname "*.$EXT" ! -name '._*' -print0)
 
 # 5. Resultado
-MSG="$copiados arquivo(s) .$EXT copiado(s)."
+total=$((copiados+substituidos+duplicados))
+MSG="$total arquivo(s) .$EXT copiado(s)."
+[ $substituidos -gt 0 ] && MSG="$MSG $substituidos substituído(s)."
+[ $duplicados -gt 0 ] && MSG="$MSG $duplicados salvo(s) como segunda cópia."
 [ $erros -gt 0 ] && MSG="$MSG $erros com erro (veja a janela do Terminal)."
-[ $copiados -eq 0 ] && [ $erros -eq 0 ] && MSG="Nenhum arquivo .$EXT encontrado na origem."
+[ $cancelado -eq 1 ] && MSG="Transferência cancelada. $MSG"
+[ $total -eq 0 ] && [ $erros -eq 0 ] && [ $cancelado -eq 0 ] && MSG="Nenhum arquivo .$EXT encontrado na origem."
 echo; echo "$MSG"
-pergunta "display dialog \"$MSG\" with title \"Copiar por extensão\" buttons {\"Abrir destino\",\"OK\"} default button \"OK\"" | grep -q "Abrir destino" && open "$DESTINO"
+pergunta "display dialog \"$(aspas "$MSG")\" with title \"Copiar por extensão\" buttons {\"Abrir destino\",\"OK\"} default button \"OK\"" | grep -q "Abrir destino" && open "$DESTINO"
