@@ -1,16 +1,16 @@
 # Copiar por extensão
 
-Script para macOS que pergunta uma extensão de arquivo e copia todos os arquivos com essa extensão de uma pasta para outra, usando janelas nativas do Mac. Feito pensando em SSDs/HDs externos.
+Script para macOS que pergunta uma ou várias extensões de arquivo e copia todos os arquivos com essas extensões de uma pasta para outra, usando janelas nativas do Mac. Feito pensando em SSDs/HDs externos.
 
 ## Como usar
 
 1. Baixe o arquivo **`Copiar por extensão.command`**.
 2. Dê dois cliques nele. Na primeira vez, se o macOS bloquear ("desenvolvedor não identificado"), clique com o botão direito → **Abrir**.
 3. Responda às perguntas:
-   - extensão (`pdf`, `epub`, `mp4`… — com ou sem ponto, maiúsculas ou minúsculas);
+   - extensões — uma ou várias, separadas por vírgula ou espaço (ex.: `epub, mobi, pdf, azw3`), com ou sem ponto, maiúsculas ou minúsculas;
    - pasta de **origem** e pasta de **destino**;
    - se quer incluir as subpastas.
-4. No fim, aparece um **resumo** com o total de arquivos e o tamanho copiado, separado em novos, substituídos e segunda cópia, além de erros, metadados `._` ignorados e o tempo gasto. Dá para abrir a pasta de destino direto dali.
+4. No fim, aparece um **resumo** com o total de arquivos e o tamanho copiado, separado em novos, substituídos e segunda cópia (e por extensão, quando forem várias), além de erros, metadados `._` ignorados e o tempo gasto. Dá para abrir a pasta de destino direto dali.
 
 Se o arquivo baixado não abrir, rode uma vez no Terminal:
 

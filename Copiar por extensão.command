@@ -1,6 +1,6 @@
 #!/bin/bash
-# Copiar por extensão — pergunta uma extensão e copia todos os arquivos
-# dessa extensão de uma pasta para outra. Nunca apaga nada; só substitui
+# Copiar por extensão — pergunta uma ou várias extensões e copia todos os arquivos
+# dessas extensões de uma pasta para outra. Nunca apaga nada; só substitui
 # um arquivo no destino se você escolher "Substituir".
 
 export COPYFILE_DISABLE=1   # não deixa o macOS criar arquivos ._ no destino
@@ -14,15 +14,39 @@ tamanho() { local t; if [ "$(uname)" = Darwin ]; then t=$(stat -f %z "$1" 2>/dev
 legivel() { awk -v b="$1" 'BEGIN{ split("bytes KB MB GB TB",u," "); i=1; while (b>=1000 && i<5) {b/=1000; i++}
   if (i==1) printf "%d %s", b, u[i]; else { s=sprintf("%.1f %s", b, u[i]); sub(/\./, ",", s); printf "%s", s } }'; }
 
-# 1. Extensão
-EXT=$(pergunta 'text returned of (display dialog "Qual extensão você quer copiar?" & return & "(ex.: pdf, epub, jpg, mp4)" default answer "" with title "Copiar por extensão" buttons {"Cancelar","Continuar"} default button "Continuar" cancel button "Cancelar")')
-[ -z "$EXT" ] && exit 0
-EXT="${EXT#.}"; EXT="${EXT// /}"
-[ -z "$EXT" ] && { pergunta 'display alert "Extensão vazia."'; exit 1; }
+# 1. Extensões (uma ou várias, separadas por vírgula, espaço ou ponto e vírgula)
+ENTRADA=$(pergunta 'text returned of (display dialog "Quais extensões você quer copiar?" & return & "Separe por vírgula ou espaço (ex.: epub, mobi, pdf, azw3)" default answer "" with title "Copiar por extensão" buttons {"Cancelar","Continuar"} default button "Continuar" cancel button "Cancelar")')
+[ -z "$ENTRADA" ] && exit 0
+EXTS=(); INVALIDAS=""
+set -f   # evita que * ou ? digitados virem nomes de arquivo
+for e in $(printf '%s' "$ENTRADA" | tr ',;' '  '); do
+  e="${e#.}"; e=$(printf '%s' "$e" | tr '[:upper:]' '[:lower:]')
+  [ -z "$e" ] && continue
+  case "$e" in *[!a-z0-9._-]*) INVALIDAS="$INVALIDAS $e"; continue ;; esac   # só letras, números, . _ -
+  repetida=0; for x in "${EXTS[@]}"; do [ "$x" = "$e" ] && repetida=1; done
+  [ $repetida -eq 0 ] && EXTS+=("$e")
+done
+set +f
+[ ${#EXTS[@]} -eq 0 ] && { pergunta 'display alert "Nenhuma extensão válida informada."'; exit 1; }
+[ -n "$INVALIDAS" ] && pergunta "display dialog \"Ignorando o que não é extensão válida:$(aspas "$INVALIDAS")\" with title \"Copiar por extensão\" buttons {\"OK\"} default button \"OK\"" >/dev/null
+
+# Texto ".epub, .mobi, .pdf" e filtro do find: ( -iname "*.epub" -o -iname "*.mobi" ... )
+LISTA=""; FILTRO=( "(" )
+for i in "${!EXTS[@]}"; do
+  [ $i -gt 0 ] && { LISTA="$LISTA, "; FILTRO+=( -o ); }
+  LISTA="$LISTA.${EXTS[$i]}"; FILTRO+=( -iname "*.${EXTS[$i]}" )
+  N_EXT[$i]=0; B_EXT[$i]=0
+done
+FILTRO+=( ")" )
+# índice da extensão de um arquivo (para o resumo por extensão)
+indice_ext() {
+  local n; n=$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')
+  for i in "${!EXTS[@]}"; do [[ "$n" == *."${EXTS[$i]}" ]] && { echo $i; return; }; done; echo 0
+}
 
 # 2. Pastas de origem e destino (abre no SSD por padrão)
 INICIO='POSIX file "/Volumes/SSD512GB"'
-ORIGEM=$(pergunta "POSIX path of (choose folder with prompt \"Escolha a pasta de ORIGEM (onde estão os .$EXT):\" default location ($INICIO))")
+ORIGEM=$(pergunta "POSIX path of (choose folder with prompt \"Escolha a pasta de ORIGEM (onde estão os $LISTA):\" default location ($INICIO))")
 [ -z "$ORIGEM" ] && exit 0
 DESTINO=$(pergunta "POSIX path of (choose folder with prompt \"Escolha a pasta de DESTINO:\" default location ($INICIO))")
 [ -z "$DESTINO" ] && exit 0
@@ -47,9 +71,9 @@ nome_livre() {
 copiados=0; substituidos=0; duplicados=0; erros=0; cancelado=0
 b_copiados=0; b_substituidos=0; b_duplicados=0
 PARA_TODOS=""      # vazio = perguntar a cada conflito; "Substituir" ou "Manter as duas" = vale para todos
-ignorados=$(find "$ORIGEM" $PROF -path "$DESTINO" -prune -o -type f -name "._*" -iname "*.$EXT" -print | wc -l | tr -d ' ')
+ignorados=$(find "$ORIGEM" $PROF -path "$DESTINO" -prune -o -type f -name "._*" "${FILTRO[@]}" -print | wc -l | tr -d ' ')
 INICIO_T=$(date +%s)
-echo "Copiando arquivos .$EXT de:"; echo "  $ORIGEM"; echo "para:"; echo "  $DESTINO"; echo
+echo "Copiando arquivos $LISTA de:"; echo "  $ORIGEM"; echo "para:"; echo "  $DESTINO"; echo
 while IFS= read -r -d '' arq; do
   nome=$(basename "$arq")
   alvo="$DESTINO/$nome"
@@ -76,6 +100,7 @@ while IFS= read -r -d '' arq; do
   # -X: não copia atributos estendidos, então o macOS não cria ._ no destino
   if cp -pX "$arq" "$alvo"; then
     tam=$(tamanho "$arq")
+    ix=$(indice_ext "$nome"); N_EXT[$ix]=$(( ${N_EXT[$ix]} + 1 )); B_EXT[$ix]=$(( ${B_EXT[$ix]} + tam ))
     case "$acao" in
       copiar)     copiados=$((copiados+1));         b_copiados=$((b_copiados+tam));         echo "✓ $nome ($(legivel $tam))" ;;
       substituir) substituidos=$((substituidos+1)); b_substituidos=$((b_substituidos+tam)); echo "↻ $nome ($(legivel $tam), substituído)" ;;
@@ -84,7 +109,7 @@ while IFS= read -r -d '' arq; do
   else
     erros=$((erros+1)); echo "✗ ERRO: $arq"
   fi
-done < <(find "$ORIGEM" $PROF -path "$DESTINO" -prune -o -type f -iname "*.$EXT" ! -name '._*' -print0)
+done < <(find "$ORIGEM" $PROF -path "$DESTINO" -prune -o -type f "${FILTRO[@]}" ! -name '._*' -print0)
 
 # 5. Resumo
 total=$((copiados+substituidos+duplicados))
@@ -92,9 +117,9 @@ b_total=$((b_copiados+b_substituidos+b_duplicados))
 seg=$(( $(date +%s) - INICIO_T )); tempo="$((seg/60)) min $((seg%60)) s"
 
 if [ $total -eq 0 ] && [ $erros -eq 0 ] && [ $cancelado -eq 0 ]; then
-  MSG="Nenhum arquivo .$EXT encontrado na origem."
+  MSG="Nenhum arquivo $LISTA encontrado na origem."
 else
-  MSG="RESUMO DA CÓPIA (.$EXT)"
+  MSG="RESUMO DA CÓPIA ($LISTA)"
   [ $cancelado -eq 1 ] && MSG="$MSG — transferência cancelada"
   MSG="$MSG
 
@@ -105,6 +130,15 @@ Total copiado: $total arquivo(s) — $(legivel $b_total)"
 • Substituídos: $substituidos — $(legivel $b_substituidos)"
   [ $duplicados -gt 0 ]   && MSG="$MSG
 • Segunda cópia: $duplicados — $(legivel $b_duplicados)"
+  if [ ${#EXTS[@]} -gt 1 ]; then
+    MSG="$MSG
+
+Por extensão:"
+    for i in "${!EXTS[@]}"; do MSG="$MSG
+• .${EXTS[$i]}: ${N_EXT[$i]} — $(legivel ${B_EXT[$i]})"; done
+    MSG="$MSG
+"
+  fi
   [ $erros -gt 0 ]        && MSG="$MSG
 • Com erro: $erros (veja a janela do Terminal)"
   [ "$ignorados" -gt 0 ]  && MSG="$MSG
